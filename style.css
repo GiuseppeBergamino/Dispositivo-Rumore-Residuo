@@ -1,0 +1,122 @@
+/* Stili generali */
+body { 
+    margin: 0; 
+    overflow: hidden; 
+    background-color: black; 
+    color: white; 
+    font-family: Helvetica, Arial, sans-serif; 
+}
+
+/* Testo informativo */
+#test-text {
+    position: fixed;
+    bottom: 10px;  
+    left: 50%;
+    transform: translateX(-50%);  
+    font-size: 12px;  
+    font-family: Helvetica, Arial, sans-serif;
+    white-space: nowrap;
+}
+
+/* Testo normale con trasparenza */
+.testo-normale {
+    color: white;
+    opacity: 0.7; /* Solo il testo normale è più trasparente */
+}
+
+/* "scream" è completamente visibile */
+.scream {
+    font-weight: bold;
+    font-size: 14px;  
+    color: white;
+    opacity: 1;
+    display: inline-block; /* permette il movimento */
+    transition: font-size 0.1s ease-in-out, transform 0.05s ease-in-out; /* Più veloce per un effetto più dinamico */
+}
+
+
+#feedback-text {
+    position: fixed;
+    top: 25%;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 20px;
+    font-weight: bold;
+    color: white;
+    text-align: center;
+    opacity: 0;
+    transition: opacity 0.7s ease-out;
+}
+
+
+
+/* Stili per i pulsanti */
+button {
+    font-family: Helvetica, Arial, sans-serif;
+    padding: 10px 15px;
+    border: none;
+    cursor: pointer;
+}
+
+#microfonoButton {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 150px;
+    height: 50px;
+    font-size: 18px;
+    background: black;
+    color: white;
+    border: 1px solid white;
+    border-radius: 30px;
+    cursor: pointer;
+    font-family: Helvetica, Arial, sans-serif;
+    transition: width 0.3s ease, height 0.3s ease, padding 0.3s ease, font-size 0.2s ease; /* ✅ Transizione più fluida */
+}
+
+/* Stile quando il microfono è attivo */
+#microfonoButton.active {
+    position: fixed !important;
+    bottom: auto !important;
+    right: auto !important;
+    top: 20px !important;
+    left: 20px !important;
+    transform: none !important;
+    width: 80px !important; /* Riduzione fluida */
+    height: 30px !important;
+    padding: 5px 8px !important;
+    font-size: 12px !important;
+    background: black !important;
+    color: white !important;
+    border: 1px solid white !important;
+   border-radius: 15px !important;
+}
+
+
+
+/* Stile del pulsante fullscreen, ora con le stesse dimensioni del pulsante microfono attivo */
+#fullscreenButton {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    width: 80px;  /* Stesse dimensioni di #microfonoButton.active */
+    height: 30px; /* Stesse dimensioni */
+    padding: 5px 8px;
+    font-size: 12px;
+    background: black;
+    color: white;
+    border: 1px solid white;
+    cursor: pointer;
+    font-family: Helvetica, Arial, sans-serif;
+    transition: background 0.3s ease; /* Transizione morbida */
+    border-radius: 15px;
+}
+
+/* Effetto hover per entrambi i pulsanti */
+#fullscreenButton:hover, 
+#microfonoButton:hover {
+    background: #222222; /* Nero leggermente più chiaro */
+}
+
+

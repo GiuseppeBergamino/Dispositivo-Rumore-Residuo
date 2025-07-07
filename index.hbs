@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{title}}</title>
+  
+
+  <link rel="stylesheet" href="/style.css">
+  
+
+</head>
+<body>
+   
+  <button id="fullscreenButton">Fullscreen</button>
+  <button id="microfonoButton">Open Mic</button>
+
+  
+<div id="test-text">
+    <span class="testo-normale">Your voice is not recorded, only the energy of your</span>
+    <span class="scream">scream</span>
+</div>
+  
+<div id="feedback-text"></div>
+
+  
+
+  
+<script src="https://cdn.jsdelivr.net/npm/simplex-noise@2.4.0/simplex-noise.min.js"></script>
+
+<script type="module">
+ 
+    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.173.0/build/three.module.js';
+
+//--------Varialibi Three-----------------//
+    
+    let renderer;
+    let camera;
+
+    // Impostazione della fotocamera
+    const fov = 90;
+    const camera_lontano = 11;
+    
+    const ruotaScena = 0.0007; //0.0006
+  
+  //-----------GESTIONE THREEEEEE----------------//
+  
+    // Creazione della scena
+    const scene = new THREE.Scene();
+
+    camera = new THREE.PerspectiveCamera(fov, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 0, camera_lontano);
+
+    // Renderer
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // Luce ambientale
+    const light = new THREE.AmbientLight(0xffffff, 0.5);
+    scene.add(light);
+  
+    const gruppoLucciole = new THREE.Group();
+    scene.add(gruppoLucciole); // Aggiungo il gruppo lucciole alla scena principale (su cui applico rotazione)
+
+// -------- Variabili per lucciole-------//
+    
+    // Numero lucciole test
+    let numLuccioleTest = 0; // Numero di lucciole di test
+    let numLucciole = numLuccioleTest; // Inizialmente solo le lucciole di test
+
+    let lucciole = [], aloni = [];
+
+    const raggioLucciola = 0.05;
+    let lucciolaGeometry, lucciolaMaterial;
+    let aloneGeometry, aloniMaterial;    
+    
+    // Definizione materiale e geometria della lucciola come tetraedro
+    lucciolaGeometry = new THREE.SphereGeometry(raggioLucciola, 2, 2);
+    lucciolaMaterial = new THREE.MeshBasicMaterial({ color: 0xEAFF24, wireframe: false });
+ 
+   // Definizione materiale e geometria dell'alone  
+    aloniMaterial = new THREE.MeshBasicMaterial({
+        color: 0xEAFF24,
+        opacity: 0.2,
+        transparent: true,
+        wireframe: false
+      
+    });
+   
+    aloneGeometry = new THREE.SphereGeometry(0.2, 2, 2);
+  
+  
+    
+// -------- Variabili per la gestione dell'urlo-------//
+    
+     let audioContext, analyser, dataArray, stream;
+     let bufferLength;
+     let isMicrofonoAttivo = false; // Variabile di stato per il microfono
+     const button = document.getElementById("microfonoButton");
+  
+     let staUrlando = false;
+     let tempoInizioUrlo = 0;
+     let rmsUrlo = 0;
+  
+     const sogliaUrlo = 0.34;  // Valore minimo RMS per considerare un urlo, orignale 0.22
+     const durataMinimaUrlo = 1000; // durata minima
+     let durataUrlo = 0;
+     
+     let staSussurrando = false;
+     let ultimoFeedbackTime = 0;
+     const tempoMinFeedback = 2000; // Minimo 2 secondi tra un messaggio e l'altro
+
+     let ultimoFeedbackPositivoTime = 0;
+     const tempoMinFeedbackPositivo = 3000; // Minimo 3 secondi tra un messaggio e l'altro
+     let haCreatoLucciola = false;
+  
+
+//----gestione lucciola utente----//
+     
+     let numLuccioleUtente = 0;
+     const maxSalvataggiUtente = 10; //
+     
+     const maxAlone = 0.6;
+     const scalaAloneUrlo = 3; //da variare per rendere l'alone più grande
+     let nuovoAlone;     
+     let lucciolaUtente = null, aloneUtente = null;
+    // let idUltimaLucciola = null; // Memorizza l'ID della lucciola utente     
+     let isLucciolaUtenteInizializzata = false;
+  
+     let aloniUtentiMaterialSuperficie, aloniUtentiMaterialWireframe;
+     let aloniUtenti, aloniUtentiSuperficie, aloniUtentiWireframe;
+  
+  aloniUtentiMaterialSuperficie = new THREE.MeshBasicMaterial({
+        color: 0xEAFF24,
+        opacity: 0.1,
+        transparent: true,
+        wireframe: false
+      
+    });
+  
+   aloniUtentiMaterialWireframe =  new THREE.MeshBasicMaterial({
+        color: 0xEAFF24,
+        opacity: 1.0,
+        transparent: true,
+        wireframe: true
+      
+    });
+  
+// -------- Variabili per il movimento-------//
+    
+    // Creazione rumore di Perlin
+     const simplex = new SimplexNoise();
+   
+     const velocitàBase = 0.005; // velocità di movimento standard
+     let velocitàFattore = 1;  // Modificatore della velocità basato sul volume
+  
+     let movimento;
+
+  
+//-------------------------BLOCCO DI FUNZIONI-------------------------// 
+
+//-------funzioni interazione pulsanti, schermo, microfono-------//
+    function aggiornaDimensioni() {
+        if (renderer && camera) {
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+        }
+    }
+
+    function toggleFullscreen() {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().then(() => {
+                aggiornaDimensioni();
+                document.getElementById("fullscreenButton").textContent = "Exit";
+            }).catch(err => console.error("Errore fullscreen:", err));
+        } else {
+            document.exitFullscreen().then(() => {
+                aggiornaDimensioni();
+                document.getElementById("fullscreenButton").textContent = "Fullscreen";
+            }).catch(err => console.error("Errore uscita fullscreen:", err));
+        }
+    }
+   
+    async function toggleMicrofono() {
+        if (!isMicrofonoAttivo) {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+               // console.log("Microfono attivato!");
+
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 128;
+                const source = audioContext.createMediaStreamSource(stream);
+                source.connect(analyser);
+               
+                bufferLength = analyser.frequencyBinCount; // corrisponde ai dati FFT
+                dataArray = new Uint8Array(bufferLength);
+              
+                isMicrofonoAttivo = true;
+
+                // Cambia lo stile e il testo del pulsante
+                button.classList.add("active");
+                button.textContent = "Close Mic";
+
+                monitorVolume(); // Avvia il monitoraggio del volume
+            } catch (error) {
+               // console.error("Accesso al microfono negato!", error);
+                button.style.display = "block"; // Se negato, mostra il pulsante
+            }
+        } else {
+            disattivaMicrofono();
+        }
+    }
+  
+    function disattivaMicrofono() {
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+        }
+        isMicrofonoAttivo = false;
+
+        // Ripristina lo stile e il testo del pulsante
+        button.classList.remove("active");
+        button.textContent = "Open Mic";
+
+       // console.log("Microfono disattivato.");
+    }
+  
+  
+//---------funzioni interazione microfono---------------//
+ 
+  // Funzione per salvare i dati dell’urlo nel server
+  //impostare il qui il limite massimo di 3 salvataggi per visita
+    async function salvaUrlo(intensità, durata) {
+    const timestamp = new Date().toISOString(); // Data e ora UTC
+    const datiUrlo = { intensità, durata, timestamp };
+
+    try {
+        const response = await fetch("/salva-urlo", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(datiUrlo),
+        });
+
+        const risultato = await response.json();
+        if (risultato.success) {
+           // console.log(`Urlo salvato con numero: ${risultato.numero_urlo}`);
+        } else {
+           // console.error("Errore nel salvataggio dell'urlo:", risultato.error);
+        }
+    } catch (error) {
+        //console.error("Errore nella richiesta al server:", error);
+    }
+}
+ 
+  
+    function creaLucciolaUtente() {
+      
+     if (lucciolaUtente) return;
+        // Se non esiste, la crea
+        lucciolaUtente = new THREE.Mesh(lucciolaGeometry, lucciolaMaterial);
+         
+        aloniUtentiSuperficie = new THREE.Mesh(aloneGeometry, aloniUtentiMaterialSuperficie);
+        aloniUtentiWireframe = new THREE.Mesh(aloneGeometry, aloniUtentiMaterialWireframe);
+        
+        aloneUtente = new THREE.Group();
+        aloneUtente.add(aloniUtentiSuperficie);
+        aloneUtente.add(aloniUtentiWireframe);
+                    
+    // Posiziona la lucciola utente davanti alla camera     
+        let posCamera = new THREE.Vector3();
+        camera.getWorldPosition(posCamera);
+        const distanza = 2;
+        lucciolaUtente.position.set(posCamera.x, posCamera.y - 1.5, posCamera.z - distanza)
+      
+        aloneUtente.position.copy(lucciolaUtente.position);
+        
+        scene.add(lucciolaUtente);
+        scene.add(aloneUtente);
+        
+        numLuccioleUtente++;
+      
+        isLucciolaUtenteInizializzata = false;
+  }
+    
+  
+    function registraLucciolaUtente() {  //aggiungi la lucciola utente all'array lucciole generale
+    if (!lucciolaUtente || !aloneUtente) return; // Se non esistono, esce
+
+   // console.log("Urlo completato, registrazione della lucciola nella scena...");
+
+  // Controllo se la lucciola è già stata aggiunta, se non lo è la aggiungo alla scena globale
+    if (!lucciole.includes(lucciolaUtente)) {
+        lucciole.push(lucciolaUtente);
+        aloni.push(aloneUtente);
+    }
+
+      lucciolaUtente = null;
+      aloneUtente = null;
+}
+ 
+    function mostraFeedbackNegativo() {
+     
+       if (staSussurrando) return; // Se il feedback è già stato mostrato, non fare nulla
+
+        staSussurrando = true; // Segna che il feedback è stato mostrato
+      
+       const now = performance.now();
+       if (now - ultimoFeedbackTime < tempoMinFeedback) return; // Se non è passato abbastanza tempo, esce
+
+       ultimoFeedbackTime = now; // Aggiorna il tempo dell’ultimo feedback
+        
+       const messaggi = [
+        "Scream louder!",
+        "Scream More!",
+        "Not Enough!",
+        "Aren't you angry?",
+        "Too quite!"
+         ];
+    
+       const testoFeedback = document.getElementById("feedback-text");
+
+    // Seleziona un messaggio casuale
+       const messaggioCasuale = messaggi[Math.floor(Math.random() * messaggi.length)];
+       testoFeedback.textContent = messaggioCasuale;
+
+    // Mostra il messaggio
+       testoFeedback.style.opacity = "1";
+    
+    // Nasconde il messaggio dopo 2 secondi
+       setTimeout(() => {
+        testoFeedback.style.opacity = "0";
+       // staSussurando = false;
+       }, 2000);
+}
+  
+function mostraFeedbackPositivo() {
+    if (haCreatoLucciola) return; // Se il feedback è già stato mostrato, non fare nulla
+
+    haCreatoLucciola = true; // Segna che il feedback è stato mostrato
+  
+    const now = performance.now();
+    if (now - ultimoFeedbackPositivoTime < tempoMinFeedbackPositivo) return; // Evita cambi rapidi
+
+    ultimoFeedbackPositivoTime = now; // Aggiorna il tempo dell’ultimo feedback
+
+    const messaggiPositivi = [
+        "Are you feeling better?",
+        "Thanks for your rage!",
+        "Your scream is safe now!",
+        "Well done, again!",
+        "Better now?"
+    ];
+    const testoFeedback = document.getElementById("feedback-text");
+
+    // Seleziona un messaggio casuale
+    const messaggioCasuale = messaggiPositivi[Math.floor(Math.random() * messaggiPositivi.length)];
+    testoFeedback.textContent = messaggioCasuale;
+
+    // Mostra il messaggio
+    testoFeedback.style.opacity = "1";
+
+    // Nasconde il messaggio dopo 2 secondi e resetta la variabile
+    setTimeout(() => {
+        testoFeedback.style.opacity = "0";
+       // haCreatoLucciola = false; // Permette di mostrare il messaggio di nuovo dopo un po'
+    }, tempoMinFeedbackPositivo);
+}
+
+    
+    function monitorVolume() {
+        if (!isMicrofonoAttivo) return;
+        requestAnimationFrame(monitorVolume);
+        
+        analyser.getByteFrequencyData(dataArray);
+        let sum = 0;
+
+        for (let i = 0; i < dataArray.length; i++) {
+            sum += dataArray[i] * dataArray[i]; 
+        }
+
+        let rms = Math.sqrt(sum / dataArray.length) / 256;
+
+        // Aggiornamento della velocità lucciole in base all’intensità dell'urlo
+        velocitàFattore = 1 + rms * 9; // Più alto il volume, più alta la velocità
+        velocitàFattore = Math.max(1, velocitàFattore * 0.999); // Decadimento graduale
+
+        // Modifica dimensione scritta "scream" in base al volume
+        let screamSize = 14 + (rms * 8);
+        document.querySelector(".scream").style.fontSize = `${screamSize}px`;
+
+        if (rms > 0.05) {
+            let vibration = rms * 20;
+            let randomX = (Math.random() - 0.5) * vibration; 
+            let randomY = (Math.random() - 0.5) * vibration;
+            document.querySelector(".scream").style.transform = `translate(${randomX}px, ${randomY}px)`;
+        } else {
+            document.querySelector(".scream").style.transform = `translate(0, 0)`;
+        }
+ 
+     
+    
+if (rms >= 0.125 && rms < sogliaUrlo) { // Se il volume è tra il sussurro e la soglia urlo
+    if (!staSussurrando) {
+        mostraFeedbackNegativo(); // Mostra il messaggio una sola volta
+        setTimeout(() => { staSussurrando = false; }, tempoMinFeedback); // Dopo 2 sec, può mostrare un nuovo messaggio
+    }
+} 
+      
+
+    // ----------Rilevamento dell'urlo------//
+      
+
+if (rms > sogliaUrlo) { // Se il volume supera la soglia
+    if (!staUrlando) {
+        staUrlando = true;
+        tempoInizioUrlo = performance.now(); // Memorizzo l'inizio dell'urlo
+    }
+    rmsUrlo += rms;
+  
+} else {
+    
+  if (staUrlando) {
+    
+     let durata = performance.now() - tempoInizioUrlo; // Durata effettiva
+        
+      if (durata >= durataMinimaUrlo) {
+           // console.log(`Urlo registrato - Intensità: ${rms.toFixed(2)}, Durata: ${(durata / 1000).toFixed(2)}s`);
+           durata = durata * 0.001;
+           rmsUrlo = rmsUrlo/durata;
+        if (numLuccioleUtente < maxSalvataggiUtente){ //massimo 5 salvataggi per visita della pagina
+           salvaUrlo(rmsUrlo, durata); // Salvo l'urlo nel database
+        }
+       /*  else {           
+           console.log('Numero salvataggi massimi raggiunto!');            
+         } */
+            creaLucciolaUtente();
+        
+            mostraFeedbackPositivo();
+            setTimeout(() => { haCreatoLucciola = false; }, tempoMinFeedbackPositivo); // Dopo 2 sec, può mostrare un nuovo messaggio
+      
+          // L'alone cresce in base alla durata dell'urlo  
+           durataUrlo = durata * 0.1; 
+           nuovoAlone = Math.min(0.2 + durataUrlo, maxAlone) * scalaAloneUrlo;
+           aloneUtente.children.forEach(mesh => {
+          if (mesh)  mesh.scale.set(nuovoAlone, nuovoAlone, nuovoAlone);
+                      });
+         
+         let nuovaOpacita = Math.min(0.1 + rmsUrlo * 0.011, 1); // L'opacità cresce con l'urlo            
+            aloneUtente.children.forEach(mesh => {
+           if (mesh) mesh.material.opacity = nuovaOpacita;
+              });
+         
+            registraLucciolaUtente(); // Aggiunge la lucciola utente alla scena (array lucciole)
+            
+        } 
+       
+        staUrlando = false; // Reset dello stato dell'urlo
+        durataUrlo = 0;
+        rmsUrlo = 0;
+    }
+}
+
+        
+    } //chiuso monitorVolume  
+     
+  
+//--------Funzioni per le lucciole --------//
+   
+    
+    // -------CREAZIONE DELLE LUCCIOLE --------//  
+    function generaLucciole(numLucciole) {
+    for (let i = 0; i < numLucciole; i++) {
+        // Creo la lucciola 
+        const lucciola = new THREE.Mesh(lucciolaGeometry, lucciolaMaterial);
+        lucciola.position.set(
+            (Math.random() - 0.5) * 10,
+            (Math.random() - 0.5) * 10,
+            (Math.random() - 0.5) * 10
+        );
+        
+        // Creo l'alone per ogni lucciola   
+        const alone = new THREE.Mesh(aloneGeometry, aloniMaterial);
+        
+        lucciole.push(lucciola);
+        aloni.push(alone);
+      
+        gruppoLucciole.add(lucciola);
+        gruppoLucciole.add(alone);
+    }
+}
+   
+    function avviaSimulazione() {
+    //console.log(`Generazione di ${numLucciole} lucciole...`);
+    generaLucciole(numLucciole);
+  }
+      
+    function controllaNuoveLucciole() {
+    fetch("/controlla-nuove-lucciole")
+        .then(response => response.json())
+        .then(data => {
+            let nuoveLucciole = data.numLucciole - (lucciole.length - numLuccioleTest);
+            if (nuoveLucciole > 0) {
+               // console.log(`Aggiunta di ${nuoveLucciole} nuove lucciole!`);
+                aggiungiLucciole(nuoveLucciole);
+            }
+        })
+        .catch(error => console.error("Errore nel controllo delle nuove lucciole di altri utenti:", error));
+}
+    
+   //Controlla nuove lucciole ogni 10 secondi
+    setInterval(controllaNuoveLucciole, 10000);
+
+  //Funzione per aggiungere nuove lucciole alla scena
+    function aggiungiLucciole(n) {
+    for (let i = 0; i < n; i++) {
+        const lucciola = new THREE.Mesh(lucciolaGeometry, lucciolaMaterial);
+        lucciola.position.set(
+            (Math.random() - 0.5) * 10,
+            (Math.random() - 0.5) * 10,
+            (Math.random() - 0.5) * 10
+        );
+
+        const alone = new THREE.Mesh(aloneGeometry, aloniMaterial);
+        
+        aloni.push(alone);       
+        lucciole.push(lucciola);
+        gruppoLucciole.add(lucciola);
+        gruppoLucciole.add(alone);
+        
+    }
+}
+  
+
+//---------FUNZIONE DI ANIMAZIONE---------------//
+    function animate() {
+      
+      requestAnimationFrame(animate);
+
+      let time = performance.now() * 0.0001;
+      
+      
+      movimento = velocitàBase * velocitàFattore;
+      
+  // Ruoto lentamente la scena sull'asse Y     
+      // scene.rotation.y += ruotaScena;
+         gruppoLucciole.rotation.y += ruotaScena;
+      
+      let luccioleTotali = Math.min(lucciole.length, aloni.length); //evito fuori indice se non ho caricato tutto array
+
+        for (let i = 0; i < luccioleTotali; i++) {
+            let noiseX = simplex.noise3D(time + i, 0, 0) * movimento;
+            let noiseY = simplex.noise3D(0, time + i, 0) * movimento;
+            let noiseZ = simplex.noise3D(0, 0, time + i) * movimento;
+
+            lucciole[i].position.x += noiseX;
+            lucciole[i].position.y += noiseY;
+            lucciole[i].position.z += noiseZ;
+          
+       // Applicazione dell'attrazione al centro della scena          
+           const forzaAttrazione = (velocitàFattore - 1) *  0.0007; // Intensità in base alla velocità
+           lucciole[i].position.x -= lucciole[i].position.x * forzaAttrazione;
+           lucciole[i].position.y -= lucciole[i].position.y * forzaAttrazione;
+           lucciole[i].position.z -= lucciole[i].position.z * forzaAttrazione; 
+           
+          /* const forzaRitorno = 0.0002; // Controlla la velocità del ritorno
+           lucciole[i].position.x += (Math.random() - 0.5) * forzaRitorno;
+           lucciole[i].position.y += (Math.random() - 0.5) * forzaRitorno;
+           lucciole[i].position.z += (Math.random() - 0.5) * forzaRitorno; */
+          
+
+
+       // Effetto di rotazione per le lucciole 
+            let rotationSpeedX = simplex.noise3D(i, time * 0.1, 0) * 0.02;
+            let rotationSpeedY = simplex.noise3D(0, i, time * 0.1) * 0.02;
+            lucciole[i].rotation.x += rotationSpeedX;
+            lucciole[i].rotation.y += rotationSpeedY;
+
+          
+       // Gli aloni seguono le lucciole
+            aloni[i].position.copy(lucciole[i].position);
+
+          
+       // Effetto di rotazione degli aloni con rumore di Perlin  
+            aloni[i].rotation.x += rotationSpeedY * 1.1; // Rotazione dell'alone
+            aloni[i].rotation.y += rotationSpeedX * 1.05;
+          
+        // Movimento della lucciola utente SOLO dopo l'inizializzazione
+            if (lucciolaUtente) {
+              if (isLucciolaUtenteInizializzata) {
+                  let noiseX = simplex.noise3D(time + i, 0, 0) * movimento; //time * 1.5
+                  let noiseY = simplex.noise3D(0, time + i, 0) * movimento;
+                  let noiseZ = simplex.noise3D(0, 0, time + i) * movimento;
+
+                  lucciolaUtente.position.x += noiseX;
+                  lucciolaUtente.position.y += noiseY;
+                  lucciolaUtente.position.z += noiseZ;
+
+                  aloneUtente.position.copy(lucciolaUtente.position);
+                 } else {
+               // Dopo alcuni frame, segue movimento e rotazione delle altre lucciole
+                       if (time > 0.1) {
+                         isLucciolaUtenteInizializzata = true;
+                           } 
+                        }
+             }
+          
+
+     }//fine for lucciole
+
+      
+
+        // Renderizza la scena
+        renderer.render(scene, camera);
+    }
+  
+
+fetch("/numero-lucciole")
+    .then(response => response.json())
+    .then(data => {
+        numLucciole += data.numLucciole; // Somma le lucciole reali
+        avviaSimulazione();
+    })
+    .catch(error => {
+        console.error("Errore nel recupero del numero di lucciole iniziali:", error);
+        if(numLuccioleTest == 0) {
+          numLucciole = 300;
+        }
+        avviaSimulazione(); // Se c'è un errore, parte con le sole lucciole di test
+      
+    });
+
+
+// Avvia l'animazione della scena
+ animate();
+  
+    
+     
+//-------Ascolta i cambiamenti di stato del fullscreen e tasti----------//
+    document.addEventListener("DOMContentLoaded", () => {
+    document.getElementById("fullscreenButton").addEventListener("click", toggleFullscreen);
+    document.getElementById("microfonoButton").addEventListener("click", toggleMicrofono);
+    });
+    
+    document.addEventListener("fullscreenchange", () => {
+    aggiornaDimensioni();
+    const button = document.getElementById("fullscreenButton");
+    button.textContent = document.fullscreenElement ? "Exit" : "Fullscreen";
+     });      
+    
+    window.addEventListener("resize", aggiornaDimensioni);
+
+  
+</script>
+
+
+</body>
+</html>
