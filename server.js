@@ -178,6 +178,24 @@ fastify.get("/controlla-nuove-lucciole", function (request, reply) {
     });
 });
 
+fastify.get("/memoria", function (request, reply) {
+  // — opzionale: chiave di accesso —
+  // if (request.query.key !== process.env.MEMORIA_KEY) {
+  //   return reply.status(403).send({ error: "Accesso non autorizzato" });
+  // }
+
+  const filePath = path.join(__dirname, "memoria.json");
+
+  fs.readFile(filePath, "utf8", (err, data) => {
+    if (err) {
+      console.error("Errore nella lettura di memoria.json:", err);
+      return reply.status(500).send({ error: "Impossibile leggere il file" });
+    }
+
+    reply.type("application/json").send(data); // restituisce tutto il JSON
+  });
+});
+
 
 // Controlla e ripristina la memoria all'avvio del server
 ripristinaMemoriaSeCorrotta();
